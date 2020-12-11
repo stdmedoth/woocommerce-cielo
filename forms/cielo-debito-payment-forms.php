@@ -12,7 +12,7 @@
       </tr>
       <tr>
         <td><Label>Expiração:</Label></td>
-        <td><input name='cartao_exp_cartaodeb' type='month'> </td>
+        <td><input name='cartao_exp_cartaodeb' class='input-text' type='month'> </td>
       </tr>
       <tr>
         <td><Label>Código Segurança (CVV):</Label>

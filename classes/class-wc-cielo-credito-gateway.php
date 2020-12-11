@@ -15,15 +15,7 @@ use Cielo\API30\Ecommerce\CreditCard;
 use Cielo\API30\Ecommerce\Request\CieloRequestException;
 
 
-function wc_credcielo_add_to_gateways( $gateways ) {
-    $gateways[] = 'WC_CredCielo_Gateway';
-    return $gateways;
-}
-
-add_filter( 'woocommerce_payment_gateways', 'wc_credcielo_add_to_gateways' );
-
-
-class WC_CredCielo_Gateway extends WC_Payment_Gateway{
+class WC_Credito_Gateway extends WC_Payment_Gateway{
   public function __construct(){
     $this->id = 'cielocredito';
     $this->method_title = 'Cielo Crédito';
@@ -49,7 +41,7 @@ class WC_CredCielo_Gateway extends WC_Payment_Gateway{
       echo wp_kses_post( wpautop( wptexturize( $this->instructions ) ) . PHP_EOL );
     }
   }
- 
+
   public function payment_fields(){
     cielo_credtpay_form();
   }
@@ -72,6 +64,11 @@ class WC_CredCielo_Gateway extends WC_Payment_Gateway{
 
     if( empty( $_POST[ 'cartao_segrcode_cartaocred' ]) ) {
       wc_add_notice(  'Código de segurança do cartão é requerida!', 'error' );
+      return false;
+    }
+
+    if( empty($_POST[ 'cartao_recur_cartaocred' ])){
+      wc_add_notice(  'Não foi possível identificar recorrencia!', 'error' );
       return false;
     }
 
@@ -167,6 +164,7 @@ class WC_CredCielo_Gateway extends WC_Payment_Gateway{
     $cartao_num =  $_POST[ 'cielo_num_cartaocred' ];
     $cartao_exp = date("m/Y", strtotime($_POST[ 'cartao_exp_cartaocred' ]));
     $cartao_segcode = $_POST[ 'cartao_segrcode_cartaocred' ];
+    $recorrencia = $_POST[ 'cartao_recur_cartaocred' ];
 
     $order = wc_get_order( $order_id );
     $order_customer = new WC_Customer( $order->get_customer_id('view') );
@@ -192,8 +190,11 @@ class WC_CredCielo_Gateway extends WC_Payment_Gateway{
       return;
     }
 
-    // Crie uma instância de Payment informando o valor do pagamento
-    $payment = $sale->payment($order->calculate_totals(true));
+    $valor = money_format('%i', $order->calculate_totals(true));
+    $valor = str_replace('.', '', $valor); // remove o ponto
+    $valor = str_replace(',', '', $valor); // remove a virgula
+
+    $payment = $sale->payment($valor);
     if(!$payment){
       wc_add_notice( __('Não foi possível instanciar pagamento') , 'error' );
       return;
@@ -207,7 +208,7 @@ class WC_CredCielo_Gateway extends WC_Payment_Gateway{
             ->setCardNumber($cartao_num)
             ->setHolder($cartao_nome);
 
-    $payment->recurrentPayment(true)->setInterval(RecurrentPayment::INTERVAL_MONTHLY);
+    $payment->recurrentPayment(true)->setInterval($recorrencia);
 
     try {
     // Configure o SDK com seu merchant e o ambiente apropriado para criar a venda
@@ -218,6 +219,8 @@ class WC_CredCielo_Gateway extends WC_Payment_Gateway{
         // Em caso de erros de integração, podemos tratar o erro aqui.
         // os códigos de erro estão todos disponíveis no manual de integração.
         $error = $e->getCieloError();
+        wc_add_notice( __('Não foi possível instanciar venda no webservice: ' . $error->getCode() . ':' . $error->getMessage()) , 'error' );
+        return ;
     }
 
     $order->payment_complete();
@@ -230,3 +233,11 @@ class WC_CredCielo_Gateway extends WC_Payment_Gateway{
     );
   }
 }
+
+
+function wc_credcielo_add_to_gateways( $gateways ) {
+    $gateways[] = 'WC_Credito_Gateway';
+    return $gateways;
+}
+
+add_filter( 'woocommerce_payment_gateways', 'wc_credcielo_add_to_gateways' );

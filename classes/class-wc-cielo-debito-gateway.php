@@ -15,7 +15,7 @@ use Cielo\API30\Ecommerce\Payment;
 use Cielo\API30\Ecommerce\CreditCard;
 use Cielo\API30\Ecommerce\Request\CieloRequestException;
 
-class WC_DebCielo_Gateway extends WC_Payment_Gateway{
+class WC_Debito_Gateway extends WC_Payment_Gateway{
   public function __construct(){
     $this->id = 'cielodebito';
     $this->method_title = 'Cielo Débito';
@@ -185,36 +185,43 @@ class WC_DebCielo_Gateway extends WC_Payment_Gateway{
       return;
     }
 
-
-    $cielo_customer = $sale->customer( $cartao_nome );
+    $cielo_customer = $sale->customer($order_customer->get_first_name() . " " .$order_customer->get_last_name());
     if(!$cielo_customer){
-      wc_add_notice( __('Não foi possível receber cliente para pagamento') , 'error' );
+      wc_add_notice( __('Não foi possível cadastrar cliente para pagamento') , 'error' );
       return;
     }
-    // Crie uma instância de Payment informando o valor do pagamento
 
-    $payment = $sale->payment($order->calculate_totals(true));
+    $valor = money_format('%i', $order->calculate_totals(true));
+    $valor = str_replace('.', '', $valor); // remove o ponto
+    $valor = str_replace(',', '', $valor); // remove a virgula
+    // Crie uma instância de Payment informando o valor do pagamento
+    $payment = $sale->payment($valor);
     if(!$payment){
       wc_add_notice( __('Não foi possível instanciar pagamento') , 'error' );
       return;
     }
 
     //$payment->setReturnUrl( );
-
     $payment->debitCard($cartao_segcode, CreditCard::VISA)
             ->setExpirationDate($cartao_exp)
             ->setCardNumber($cartao_num)
             ->setHolder($cartao_nome);
 
-    $sale = (new CieloEcommerce($merchant, $environment))->createSale($sale);
-    if(!$sale){
-      wc_add_notice( __('Não foi possível instanciar venda no webservice') , 'error' );
-      return;
-    }
 
-    $paymentId = $sale->getPayment()->getPaymentId();
-    if(!$paymentId){
-      wc_add_notice( __('Não foi possível receber id do pagamento') , 'error' );
+    try {
+      // Configure o SDK com seu merchant e o ambiente apropriado para criar a venda
+      $sale = (new CieloEcommerce($merchant, $environment))->createSale($sale);
+      // Com a venda criada na Cielo, já temos o ID do pagamento, TID e demais
+      // dados retornados pela Cielo
+      $paymentId = $sale->getPayment()->getPaymentId();
+      // Utilize a URL de autenticação para redirecionar o cliente ao ambiente
+      // de autenticação do emissor do cartão
+      $authenticationUrl = $sale->getPayment()->getAuthenticationUrl();
+    } catch (CieloRequestException $e) {
+      // Em caso de erros de integração, podemos tratar o erro aqui.
+      // os códigos de erro estão todos disponíveis no manual de integração.
+      $error = $e->getCieloError();
+      wc_add_notice( __('Não foi possível instanciar venda no webservice: ' . $error->getCode() . ':' . $error->getMessage()) , 'error' );
       return;
     }
 
@@ -230,7 +237,7 @@ class WC_DebCielo_Gateway extends WC_Payment_Gateway{
 }
 
 function wc_debcielo_add_to_gateways( $gateways ) {
-    $gateways[] = 'WC_DebCielo_Gateway';
+    $gateways[] = 'WC_Debito_Gateway';
     return $gateways;
 }
 

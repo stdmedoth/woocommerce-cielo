@@ -19,5 +19,4 @@ function wc_cielo_load_plugin(){
 
   require 'forms/cielo-credito-payment-forms.php';
   require 'forms/cielo-debito-payment-forms.php';
-
 }
