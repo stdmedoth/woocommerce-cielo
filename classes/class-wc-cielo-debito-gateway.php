@@ -1,12 +1,16 @@
 <?php
 
+
+defined( 'ABSPATH' ) or exit;
+
 // Make sure WooCommerce is active
 if ( ! in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins', get_option( 'active_plugins' ) ) ) ) return;
-use Cielo\API30\Merchant;
 
+use Cielo\API30\Merchant;
 use Cielo\API30\Ecommerce\Environment;
 use Cielo\API30\Ecommerce\Sale;
 use Cielo\API30\Ecommerce\CieloEcommerce;
+use Cielo\API30\Ecommerce\RecurrentPayment;
 use Cielo\API30\Ecommerce\Payment;
 use Cielo\API30\Ecommerce\CreditCard;
 use Cielo\API30\Ecommerce\Request\CieloRequestException;
@@ -19,6 +23,11 @@ class WC_DebCielo_Gateway extends WC_Payment_Gateway{
     $this->title        = $this->get_option( 'title' );
     $this->description  = $this->get_option( 'description' );
     $this->instructions = $this->get_option( 'instructions', $this->description );
+    $this->enviroment  = $this->get_option( 'enviroment' );
+    $this->merchant_id = $this->get_option( 'merchant_id' );
+    $this->merchant_key = $this->get_option( 'merchant_key' );
+
+    $this->has_fields = true;
 
     $this->init_form_fields();
     $this->init_settings();
@@ -27,6 +36,42 @@ class WC_DebCielo_Gateway extends WC_Payment_Gateway{
     add_action( 'woocommerce_email_before_order_table', array( $this, 'email_instructions' ), 10, 3 );
 
   }
+
+  public function email_instructions( $order, $sent_to_admin, $plain_text = false ) {
+    if ( $this->instructions && ! $sent_to_admin && $this->id === $order->get_payment_method() ) {
+      echo wp_kses_post( wpautop( wptexturize( $this->instructions ) ) . PHP_EOL );
+    }
+  }
+
+
+  public function payment_fields(){
+    cielo_debtpay_form();
+  }
+
+  public function validate_fields() {
+    if( empty( $_POST[ 'cielo_nome_cartaodeb' ]) ) {
+      wc_add_notice(  'Nome impresso no cartão é requerido!', 'error' );
+      return false;
+    }
+
+    if( empty( $_POST[ 'cielo_num_cartaodeb' ]) ) {
+      wc_add_notice(  'Número do cartão é requerido!', 'error' );
+      return false;
+    }
+
+    if( empty( $_POST[ 'cartao_exp_cartaodeb' ]) ) {
+      wc_add_notice(  'Data de Expiração do cartão é requerida!', 'error' );
+      return false;
+    }
+
+    if( empty( $_POST[ 'cartao_segrcode_cartaodeb' ]) ) {
+      wc_add_notice(  'Código de segurança do cartão é requerida!', 'error' );
+      return false;
+    }
+
+    return true;
+  }
+
 
   public function init_form_fields() {
     $this->form_fields = apply_filters( 'wc_cielo_debito_form_fields', array(
@@ -87,11 +132,6 @@ class WC_DebCielo_Gateway extends WC_Payment_Gateway{
     ) );
   }
 
-  public function email_instructions( $order, $sent_to_admin, $plain_text = false ) {
-  	if ( $this->instructions && ! $sent_to_admin && $this->id === $order->payment_method && $order->has_status( 'on-hold' ) ) {
-  		echo wpautop( wptexturize( $this->instructions ) ) . PHP_EOL;
-  	}
-  }
 
   public function thankyou_page() {
     if ( $this->instructions ) {
@@ -101,14 +141,87 @@ class WC_DebCielo_Gateway extends WC_Payment_Gateway{
 
   public function process_payment( $order_id ) {
 
+    switch ($this->enviroment) {
+      case 'producao':
+        $environment = Environment::production();
+        break;
+
+      case 'testes':
+        $environment = Environment::sandbox();
+        break;
+
+      default:
+        wc_add_notice( __('Ambiente de pagamento não configurado') , 'error' );
+        return;
+    }
+
+    if( empty( $_POST[ 'cielo_nome_cartaodeb' ]) ) {
+      wc_add_notice(  'Nome impresso no cartão é requerido!', 'error' );
+      return false;
+    }
+
+
+    $cartao_nome = $_POST['cielo_nome_cartaodeb'];
+    $cartao_num =  $_POST[ 'cielo_num_cartaodeb' ];
+    $cartao_exp = date("m/Y", strtotime($_POST[ 'cartao_exp_cartaodeb' ]));
+    $cartao_segcode = $_POST[ 'cartao_segrcode_cartaodeb' ];
+
     $order = wc_get_order( $order_id );
-    // Mark as on-hold (we're awaiting the payment)
-    $order->update_status( 'on-hold', __( 'Aguardando pagamento', 'wc-cielo-debito-gateway' ) );
-    // Reduce stock levels
+    $order_customer = new WC_Customer( $order->get_customer_id('view') );
+    if(!$order_customer){
+      wc_add_notice( __('Não foi possível receber cadastro do cliente') , 'error' );
+      return;
+    }
+
+    $merchant = new Merchant($this->merchant_id, $this->merchant_key);
+    if(!$merchant){
+      wc_add_notice( __('Não foi possível criar Merchant') , 'error' );
+      return;
+    }
+
+    $sale = new Sale($order_id);
+    if(!$sale){
+      wc_add_notice( __('Não foi possível criar instancia de venda') , 'error' );
+      return;
+    }
+
+
+    $cielo_customer = $sale->customer( $cartao_nome );
+    if(!$cielo_customer){
+      wc_add_notice( __('Não foi possível receber cliente para pagamento') , 'error' );
+      return;
+    }
+    // Crie uma instância de Payment informando o valor do pagamento
+
+    $payment = $sale->payment($order->calculate_totals(true));
+    if(!$payment){
+      wc_add_notice( __('Não foi possível instanciar pagamento') , 'error' );
+      return;
+    }
+
+    //$payment->setReturnUrl( );
+
+    $payment->debitCard($cartao_segcode, CreditCard::VISA)
+            ->setExpirationDate($cartao_exp)
+            ->setCardNumber($cartao_num)
+            ->setHolder($cartao_nome);
+
+    $sale = (new CieloEcommerce($merchant, $environment))->createSale($sale);
+    if(!$sale){
+      wc_add_notice( __('Não foi possível instanciar venda no webservice') , 'error' );
+      return;
+    }
+
+    $paymentId = $sale->getPayment()->getPaymentId();
+    if(!$paymentId){
+      wc_add_notice( __('Não foi possível receber id do pagamento') , 'error' );
+      return;
+    }
+
+    $order->payment_complete();
+    $order->update_status( 'on-hold', __( 'Aguardando pagamento', 'wc-cielo-credito-gateway' ) );
     $order->reduce_order_stock();
-    // Remove cart
     WC()->cart->empty_cart();
-    // Return thankyou redirect
     return array(
         'result'    => 'success',
         'redirect'  => $this->get_return_url( $order )
