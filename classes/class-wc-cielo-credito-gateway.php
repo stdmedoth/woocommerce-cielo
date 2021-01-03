@@ -26,6 +26,8 @@ class WC_Credito_Gateway extends WC_Payment_Gateway{
     $this->enviroment  = $this->get_option( 'enviroment' );
     $this->merchant_id = $this->get_option( 'merchant_id' );
     $this->merchant_key = $this->get_option( 'merchant_key' );
+    $this->tipo_pagamento = $this->get_option( 'tipo_pagamento' );
+
     $this->has_fields = true;
 
     $this->init_form_fields();
@@ -43,7 +45,7 @@ class WC_Credito_Gateway extends WC_Payment_Gateway{
   }
 
   public function payment_fields(){
-    cielo_credtpay_form();
+    cielo_credtpay_form( $this->tipo_pagamento );
   }
 
   public function validate_fields() {
@@ -52,8 +54,13 @@ class WC_Credito_Gateway extends WC_Payment_Gateway{
 		  return false;
     }
 
-    if( empty( $_POST[ 'cielo_num_cartaocred' ]) ) {
+    if( empty( $_POST[ 'cielo_num_cartaocred' ] ) ) {
 		  wc_add_notice(  'Número do cartão é requerido!', 'error' );
+		  return false;
+    }
+
+    if(strlen($_POST[ 'cielo_num_cartaocred' ])!=16){
+      wc_add_notice(  'Cartão de crédito deve ter 16 digitos!', 'error' );
 		  return false;
     }
 
@@ -126,7 +133,14 @@ class WC_Credito_Gateway extends WC_Payment_Gateway{
           'default'     => __( '', 'wc-cielo-credito-gateway' ),
           'desc_tip'    => true,
         ),
-
+        'tipo_pagamento' => array(
+          'title'       => __( 'Tipo de Pagamento', 'wc-cielo-debito-gateway' ),
+          'type'        => 'select',
+          'options'     => array(
+            'padrao' => 'Padrão',
+            'recorrente' => 'Recorrente'
+          )
+        ),
         'instructions' => array(
             'title'       => __( 'Instruções', 'wc-cielo-credito-gateway' ),
             'type'        => 'textarea',
@@ -200,8 +214,6 @@ class WC_Credito_Gateway extends WC_Payment_Gateway{
       return;
     }
 
-    //$payment->setReturnUrl();
-
     $payment->setType(Payment::PAYMENTTYPE_CREDITCARD)
             ->creditCard($cartao_segcode, CreditCard::VISA)
             ->setExpirationDate($cartao_exp)
@@ -211,26 +223,28 @@ class WC_Credito_Gateway extends WC_Payment_Gateway{
     $payment->recurrentPayment(true)->setInterval($recorrencia);
 
     try {
-    // Configure o SDK com seu merchant e o ambiente apropriado para criar a venda
-    $sale = (new CieloEcommerce($merchant, $environment))->createSale($sale);
 
-    $recurrentPaymentId = $sale->getPayment()->getRecurrentPayment()->getRecurrentPaymentId();
+      $sale = (new CieloEcommerce($merchant, $environment))->createSale($sale);
+      $recurrentPaymentId = $sale->getPayment()->getRecurrentPayment()->getRecurrentPaymentId();
+
     } catch (CieloRequestException $e) {
-        // Em caso de erros de integração, podemos tratar o erro aqui.
-        // os códigos de erro estão todos disponíveis no manual de integração.
+
         $error = $e->getCieloError();
         wc_add_notice( __('Não foi possível instanciar venda no webservice: ' . $error->getCode() . ':' . $error->getMessage()) , 'error' );
         return ;
+
     }
 
     $order->payment_complete();
     $order->update_status( 'on-hold', __( 'Aguardando pagamento', 'wc-cielo-credito-gateway' ) );
     $order->reduce_order_stock();
+
     WC()->cart->empty_cart();
     return array(
         'result'    => 'success',
         'redirect'  => $this->get_return_url( $order )
     );
+
   }
 }
 
