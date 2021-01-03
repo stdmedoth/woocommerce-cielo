@@ -15,7 +15,7 @@ use Cielo\API30\Ecommerce\CreditCard;
 use Cielo\API30\Ecommerce\Request\CieloRequestException;
 
 
-class WC_Credito_Gateway extends WC_Payment_Gateway{
+class WC_CieloCredito_Gateway extends WC_Payment_Gateway_CC{
   public function __construct(){
     $this->id = 'cielocredito';
     $this->method_title = 'Cielo Crédito';
@@ -27,6 +27,7 @@ class WC_Credito_Gateway extends WC_Payment_Gateway{
     $this->merchant_id = $this->get_option( 'merchant_id' );
     $this->merchant_key = $this->get_option( 'merchant_key' );
     $this->tipo_pagamento = $this->get_option( 'tipo_pagamento' );
+    $this->bandeira = null;
 
     $this->has_fields = true;
 
@@ -46,21 +47,25 @@ class WC_Credito_Gateway extends WC_Payment_Gateway{
 
   public function payment_fields(){
     cielo_credtpay_form( $this->tipo_pagamento );
+    //$this->form(); //puxa o formulario da classe WC_Payment_Gateway_CC
   }
 
   public function validate_fields() {
+
     if( empty( $_POST[ 'cielo_nome_cartaocred' ]) ) {
 		  wc_add_notice(  'Nome impresso no cartão é requerido!', 'error' );
 		  return false;
     }
 
-    if( empty( $_POST[ 'cielo_num_cartaocred' ] ) ) {
-		  wc_add_notice(  'Número do cartão é requerido!', 'error' );
+    $nome = $_POST[ 'cielo_nome_cartaocred' ];
+    $contagem = str_word_count($nome);
+    if($contagem <= 1){
+      wc_add_notice(  'Insira o nome como está no cartão!', 'error' );
 		  return false;
     }
 
-    if(strlen($_POST[ 'cielo_num_cartaocred' ])!=16){
-      wc_add_notice(  'Cartão de crédito deve ter 16 digitos!', 'error' );
+    if( empty( $_POST[ 'cielo_num_cartaocred' ] ) ) {
+		  wc_add_notice(  'Número do cartão é requerido!', 'error' );
 		  return false;
     }
 
@@ -74,8 +79,31 @@ class WC_Credito_Gateway extends WC_Payment_Gateway{
       return false;
     }
 
-    if( empty($_POST[ 'cartao_recur_cartaocred' ])){
-      wc_add_notice(  'Não foi possível identificar recorrencia!', 'error' );
+    if( $this->tipo_pagamento == 'recorrente' ){
+      if( empty($_POST[ 'cartao_recur_cartaocred' ])){
+        wc_add_notice(  'Não foi possível identificar recorrencia!', 'error' );
+        return false;
+      }
+    }
+
+    $cartao_num = $_POST[ 'cielo_num_cartaocred' ];
+
+    if(startsWith($cartao_num, '38')){
+      $this->bandeira = CreditCard::DINERS;
+    }else
+    if(startsWith($cartao_num, '35')){
+      $this->bandeira = CreditCard::JCB;
+    }else
+    if(startsWith($cartao_num, '4')){
+      $this->bandeira = CreditCard::VISA;
+    }else
+    if(startsWith($cartao_num, '5')){
+      $this->bandeira = CreditCard::MASTERCARD;
+    }else
+    if(startsWith($cartao_num, '6')){
+      $this->bandeira = CreditCard::DISCOVER;
+    }else{
+      wc_add_notice(  'Bandeira do cartão não registrada!', 'error' );
       return false;
     }
 
@@ -215,7 +243,7 @@ class WC_Credito_Gateway extends WC_Payment_Gateway{
     }
 
     $payment->setType(Payment::PAYMENTTYPE_CREDITCARD)
-            ->creditCard($cartao_segcode, CreditCard::VISA)
+            ->creditCard($cartao_segcode, $this->bandeira)
             ->setExpirationDate($cartao_exp)
             ->setCardNumber($cartao_num)
             ->setHolder($cartao_nome);
@@ -250,7 +278,7 @@ class WC_Credito_Gateway extends WC_Payment_Gateway{
 
 
 function wc_credcielo_add_to_gateways( $gateways ) {
-    $gateways[] = 'WC_Credito_Gateway';
+    $gateways[] = 'WC_CieloCredito_Gateway';
     return $gateways;
 }
 

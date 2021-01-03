@@ -13,6 +13,9 @@ function checkDigit(input, event, value) {
     if(value.startsWith('38')){
       input.className = cc_class_name + ' dinersclub identified'
     }else
+    if(value.startsWith('35')){
+      input.className = cc_class_name + ' jcb identified'
+    }else
     if(value.startsWith('4')){
       input.className = cc_class_name + ' visa identified'
     }else

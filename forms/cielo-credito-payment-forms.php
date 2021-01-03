@@ -1,4 +1,7 @@
 <?php
+
+defined( 'ABSPATH' ) or exit;
+
 use Cielo\API30\Ecommerce\RecurrentPayment;
 
 function cielo_credtpay_form($tipo_pagamento){
@@ -6,12 +9,12 @@ function cielo_credtpay_form($tipo_pagamento){
   <table>
     <tr>
       <td><Label>Nome Impresso no Cartão:</Label></td>
-      <td><input name='cielo_nome_cartaocred' value='<?php if(isset($_POST['cielo_nome_cartaodeb'])) echo $_POST['cielo_nome_cartaocred'];?>' type='text'> </td>
+      <td><input name='cielo_nome_cartaocred' type='text' class="input-text wc-credit-card-form-name" maxlength="100" value='<?php if(isset($_POST['cielo_nome_cartaodeb'])) echo $_POST['cielo_nome_cartaocred'];?>'> </td>
     </tr>
     <tr>
 
       <td><Label for='ccNo'>Número cartão:</Label></td>
-      <td><input name='cielo_num_cartaocred' type='text' class="input-text wc-credit-card-form-card-number validate-required " onkeypress="return checkDigit(this, event, value)"  maxlength="20"  placeholder="•••• •••• •••• ••••"  value='<?php if(isset($_POST['cielo_num_cartaocred'])) echo $_POST['cielo_num_cartaocred'];?>'></td>
+      <td><input name='cielo_num_cartaocred' type='text' class="input-text wc-credit-card-form-card-number validate-required " onkeyup="return checkDigit(this, event, value)"  maxlength="20"  placeholder="•••• •••• •••• ••••"  value='<?php if(isset($_POST['cielo_num_cartaocred'])) echo $_POST['cielo_num_cartaocred'];?>'></td>
     </tr>
     <tr>
       <td><Label>Expiração:</Label></td>
@@ -19,7 +22,7 @@ function cielo_credtpay_form($tipo_pagamento){
     </tr>
     <tr>
       <td><Label>Código Segurança (CVV):</Label>
-      <td><input  name='cartao_segrcode_cartaocred' autocomplete="cc-csc" value='<?php if(isset($_POST['cartao_segrcode_cartaocred'])) echo $_POST['cartao_segrcode_cartaocred'];?>' type='text'> </td>
+      <td><input  name='cartao_segrcode_cartaocred' autocomplete="cc-csc" maxlength="3" value='<?php if(isset($_POST['cartao_segrcode_cartaocred'])) echo $_POST['cartao_segrcode_cartaocred'];?>' type='text'> </td>
     </tr>
     <?php if($tipo_pagamento == 'recorrente'){  ?>
     <tr>
