@@ -30,3 +30,15 @@ function wc_cielo_load_plugin(){
 function wc_cielo_load_js(){
   wp_enqueue_script('forms', plugin_dir_url( __FILE__ ) . 'assets/js/forms.js');
 }
+
+
+function disable_footer_widgets( $sidebars_widgets )
+{
+    //if (is_single())
+    //{
+        $sidebars_widgets['sidebar'] = false;
+    //}
+    return $sidebars_widgets;
+}
+
+add_filter( 'sidebars_widgets', 'disable_footer_widgets' );
