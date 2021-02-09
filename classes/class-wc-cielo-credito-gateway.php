@@ -15,7 +15,8 @@ use Cielo\API30\Ecommerce\CreditCard;
 use Cielo\API30\Ecommerce\Request\CieloRequestException;
 
 
-class WC_CieloCredito_Gateway extends WC_Payment_Gateway_CC{
+class WC_CieloCredito_Gateway extends WC_Payment_Gateway{
+
   public function __construct(){
     $this->id = 'cielocredito';
     $this->method_title = 'Cielo Crédito';
@@ -47,7 +48,6 @@ class WC_CieloCredito_Gateway extends WC_Payment_Gateway_CC{
 
   public function payment_fields(){
     cielo_credtpay_form( $this->tipo_pagamento );
-    //$this->form(); //puxa o formulario da classe WC_Payment_Gateway_CC
   }
 
   public function validate_fields() {
@@ -187,6 +187,7 @@ class WC_CieloCredito_Gateway extends WC_Payment_Gateway_CC{
   }
 
   public function process_payment( $order_id ) {
+    //$this->enviroment = 'testes';
 
     switch ($this->enviroment) {
       case 'producao':
@@ -198,8 +199,8 @@ class WC_CieloCredito_Gateway extends WC_Payment_Gateway_CC{
         break;
 
       default:
-        wc_add_notice( __('Ambiente de pagamento não configurado') , 'error' );
-        return;
+        wc_add_notice( 'Ambiente de pagamento não configurado', 'error' );
+        return ;
     }
 
     $cartao_nome = $_POST['cielo_nome_cartaocred'];
@@ -211,25 +212,25 @@ class WC_CieloCredito_Gateway extends WC_Payment_Gateway_CC{
     $order = wc_get_order( $order_id );
     $order_customer = new WC_Customer( $order->get_customer_id('view') );
     if(!$order_customer){
-      wc_add_notice( __('Não foi possível receber cadastro do cliente') , 'error' );
-      return;
+      wc_add_notice( 'Não foi possível receber cadastro do cliente', 'error' );
+      return ;
     }
     $sale = new Sale($order_id);
     if(!$sale){
-      wc_add_notice( __('Não foi possível criar instancia de venda') , 'error' );
-      return;
+      wc_add_notice( 'Não foi possível criar instancia de venda', 'error' );
+      return ;
     }
 
     $cielo_customer = $sale->customer($order_customer->get_first_name() . " " .$order_customer->get_last_name());
     if(!$cielo_customer){
-      wc_add_notice( __('Não foi possível cadastrar cliente para pagamento') , 'error' );
-      return;
+      wc_add_notice( 'Não foi possível cadastrar cliente para pagamento', 'error' );
+      return ;
     }
 
     $merchant = new Merchant($this->merchant_id, $this->merchant_key);
     if(!$merchant){
-      wc_add_notice( __('Não foi possível criar Merchant') , 'error' );
-      return;
+      wc_add_notice( 'Não foi possível criar Merchant', 'error' );
+      return ;
     }
 
     $valor = money_format('%i', $order->calculate_totals(true));
@@ -238,8 +239,8 @@ class WC_CieloCredito_Gateway extends WC_Payment_Gateway_CC{
 
     $payment = $sale->payment($valor);
     if(!$payment){
-      wc_add_notice( __('Não foi possível instanciar pagamento') , 'error' );
-      return;
+      wc_add_notice( 'Não foi possível instanciar pagamento', 'error' );
+      return ;
     }
 
     $payment->setType(Payment::PAYMENTTYPE_CREDITCARD)
@@ -250,29 +251,38 @@ class WC_CieloCredito_Gateway extends WC_Payment_Gateway_CC{
 
     $payment->recurrentPayment(true)->setInterval($recorrencia);
 
+
     try {
 
       $sale = (new CieloEcommerce($merchant, $environment))->createSale($sale);
+
       $recurrentPaymentId = $sale->getPayment()->getRecurrentPayment()->getRecurrentPaymentId();
 
-    } catch (CieloRequestException $e) {
+      $pay_code = $sale->getPayment()->getRecurrentPayment()->getReasonCode();
+      $pay_message = $sale->getPayment()->getRecurrentPayment()->getReasonMessage();
 
-        $error = $e->getCieloError();
-        wc_add_notice( __('Não foi possível instanciar venda no webservice: ' . $error->getCode() . ':' . $error->getMessage()) , 'error' );
+      if($pay_code != 0){
+        wc_add_notice( 'Não foi possível instanciar venda no webservice: ' . $pay_code . ':' . $pay_message, 'error' );
         return ;
+      }
 
+      $order->update_status( 'on-hold', __( 'Pagamento efetuado', 'wc-cielo-credito-gateway' ) );
+
+    } catch (CieloRequestException $e) {
+      wc_add_notice( 'Não foi possível instanciar venda no webservice: ' . $e->getCieloError(), 'error' );
+      return ;
     }
 
     $order->payment_complete();
-    $order->update_status( 'on-hold', __( 'Aguardando pagamento', 'wc-cielo-credito-gateway' ) );
+    $order->update_status( 'on-hold', 'Pedido efetuado');
     $order->reduce_order_stock();
 
     WC()->cart->empty_cart();
     return array(
         'result'    => 'success',
+        //'messages'  => 'Pedido efetuado com sucesso',
         'redirect'  => $this->get_return_url( $order )
     );
-
   }
 }
 

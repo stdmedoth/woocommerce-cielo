@@ -1,5 +1,4 @@
  <?php
-
  /*
   * Plugin Name: WooCommerce Cielo
   * Description: Uma integração do WooCommerce com API Cielo
