@@ -10,6 +10,8 @@ defined( 'ABSPATH' ) || exit;
 
 require 'vendor/autoload.php';
 
+if ( !in_array( 'woocommerce-cielo/woocommerce-cielo.php', (array) get_option( 'active_plugins', array() ) ) ) wc_add_notice(  'Woocommerce deve estar ativo!', 'error' ); return;
+
 add_action( 'woocommerce_init', 'wc_cielo_load_plugin'  );
 
 add_action('wp_enqueue_scripts', 'wc_cielo_load_js');

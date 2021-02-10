@@ -3,9 +3,6 @@
 
 defined( 'ABSPATH' ) or exit;
 
-// Make sure WooCommerce is active
-if ( ! in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins', get_option( 'active_plugins' ) ) ) ) return;
-
 use Cielo\API30\Merchant;
 use Cielo\API30\Ecommerce\Environment;
 use Cielo\API30\Ecommerce\Sale;
@@ -64,7 +61,7 @@ class WC_Debito_Gateway extends WC_Payment_Gateway{
       return false;
     }
 
-    if( empty( $_POST[ 'cartao_segrcode_cartaodeb' ]) ) {
+    if( empty($_POST[ 'cartao_segrcode_cartaodeb' ]) ){
       wc_add_notice(  'Código de segurança do cartão é requerida!', 'error' );
       return false;
     }
